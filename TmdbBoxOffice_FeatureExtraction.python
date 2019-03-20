@@ -1,0 +1,273 @@
+# -*- coding: utf-8 -*-
+
+
+def PlotNullCount(train_df,test_df):
+    plt.figure(figsize=(15, 10))
+    plt.title("Null Counts Of Features",fontsize=20)
+    train_df.isna().sum().sort_values(ascending=True).plot(kind='barh',colors='Blue', fontsize=20)
+
+def MakeGenresAndPlot(train_df,test_df):
+    train_df.genres = train_df.genres.apply(lambda x: list(map(lambda d: list(d.values())[1], ast.literal_eval(x)) if isinstance(x, str) else []))
+    test_df.genres = test_df.genres.apply(lambda x: list(map(lambda d: list(d.values())[1], ast.literal_eval(x)) if isinstance(x, str) else []))
+    print(train_df.genres.head())
+    plt.bar(train_df.genres.apply(len).value_counts().sort_index().keys(), train_df.genres.apply(len).value_counts().sort_index())
+    
+    genres = Counter(itertools.chain.from_iterable(pd.concat((train_df.genres, test_df.genres), axis=0).values))
+    
+    temp_train = train_df[['id', 'genres']]
+    temp_test = test_df[['id', 'genres']]
+    
+    for g in genres:
+        temp_train.loc[:,g] = temp_train.genres.apply(lambda x: 1 if g in x else 0)
+        temp_test.loc[:,g] = temp_test.genres.apply(lambda x: 1 if g in x else 0)
+    
+    train_df = pd.concat([train_df, temp_train.iloc[:,1:]], axis=1) 
+    train_df = train_df.drop(train_df['genres'],axis=1)
+    test_df= pd.concat([test_df, temp_test.iloc[:,1:]], axis=1) 
+    test_df =test_df.drop(test_df['genres'], axis=1)
+    return train_df,test_df
+
+
+def DropColumn(train_df,test_df,column_name):        
+    train_df = train_df.drop([column_name], axis=1)
+    test_df = test_df.drop([column_name], axis=1)
+    return train_df,test_df
+
+def GraphsOfOriginalLanguages(train_df,test_df):
+    #graph of distribution by language.
+    plt.figure(figsize=(20,15))
+    sns.countplot(train_df['original_language'].sort_values())
+    plt.title("Original Language Count",fontsize=20)
+    plt.show()
+    
+    #graph of distribution of revenues by languages.
+    plt.figure(figsize=(15,11))
+    g1 = sns.boxplot(x='original_language', y='revenue',data=train_df[(train_df['original_language'].isin((train_df['original_language'].value_counts()[:10].index.values)))])
+    g1.set_title("Revenue by original language's movies", fontsize=20) # title and fontsize
+    g1.set_xticklabels(g1.get_xticklabels(),rotation=45) # It's the way to rotate the xticks when we use variable to our graphs
+    g1.set_xlabel('Original language', fontsize=18) # Xlabel
+    g1.set_ylabel('Revenue', fontsize=18) #Ylabel
+    
+    plt.show()
+
+
+def get_dictionary(s):
+    try:
+        d = eval(s)
+    except:
+        d = {}
+    return d
+
+def get_json_dict(df,column) :
+    result = dict()
+    d = dict()
+    rows = df[column].values
+    for row in rows :
+        if row is None : continue
+        for i in row :
+            if i['name'] not in d :
+                d[i['name']] = 0
+            d[i['name']] += 1
+    result[column] = d
+    return result
+
+def MakeDictsForJsonColumn(train_df,test_df,column) :
+    
+    train_df[column] = train_df[column].apply(lambda x : get_dictionary(x))
+    test_df[column] = test_df[column].apply(lambda x : get_dictionary(x))
+    train_dict = get_json_dict(train_df,column)
+    test_dict = get_json_dict(test_df,column)
+    remove = []
+    train_id = set(list(train_dict[column].keys()))
+    test_id = set(list(test_dict[column].keys()))   
+    
+    remove += list(train_id - test_id) + list(test_id - train_id)
+    for i in train_id.union(test_id) - set(remove) :
+        if train_dict[column][i] < 10 or i == '' :
+            remove += [i]
+            
+    for i in remove :
+        if i in train_dict[column] :
+            del train_dict[column][i]
+        if i in test_dict[column] :
+            del test_dict[column][i]
+            
+    return train_df,test_df,train_dict,test_dict
+
+def Make_Features_With_Name(train_df,test_df,column) :
+    train_df,test_df,train_dict,test_dict  = MakeDictsForJsonColumn(train_df,test_df,column)       
+    train_df[column+'_count'] = train_df[column].apply(lambda x : len(x)) 
+    test_df[column+'_count'] = test_df[column].apply(lambda x : len(x))       
+    train_df[column] = train_df[column].map(lambda x: sorted(list(set([n if n in train_dict[column] else column +'_etc' for n in [d['name'] for d in x]])))).map(lambda x: ','.join(map(str, x)))
+    temp = train_df[column].str.get_dummies(sep=',')
+    train_df = pd.concat([train_df, temp], axis=1, sort=False)
+    test_df[column] = test_df[column].map(lambda x: sorted(list(set([n if n in test_dict[column] else column+'_etc' for n in [d['name'] for d in x]])))).map(lambda x: ','.join(map(str, x)))
+    temp = test_df[column].str.get_dummies(sep=',')
+    test_df = pd.concat([test_df, temp], axis=1, sort=False)
+    train_df, test_df = DropColumn(train_df,test_df,column)
+    return train_df,test_df    
+
+
+def Make_Features_Crew(train_df,test_df) :
+    train_df,test_df,train_dict,test_dict  = MakeDictsForJsonColumn(train_df,test_df,'crew') 
+    train_df['genders_0_crew'] = train_df['crew'].apply(lambda x: sum([1 for i in x if i['gender'] == 0]))
+    train_df['genders_1_crew'] = train_df['crew'].apply(lambda x: sum([1 for i in x if i['gender'] == 1]))
+    train_df['genders_2_crew'] = train_df['crew'].apply(lambda x: sum([1 for i in x if i['gender'] == 2]))
+    train_df['crew_count'] = train_df['crew'].apply(lambda x : len(x))
+    
+    test_df['genders_0_crew'] = test_df['crew'].apply(lambda x: sum([1 for i in x if i['gender'] == 0]))
+    test_df['genders_1_crew'] = test_df['crew'].apply(lambda x: sum([1 for i in x if i['gender'] == 1]))
+    test_df['genders_2_crew'] = test_df['crew'].apply(lambda x: sum([1 for i in x if i['gender'] == 2]))
+    test_df['crew_count'] = test_df['crew'].apply(lambda x : len(x))
+    train_df, test_df = DropColumn(train_df,test_df,'crew')
+    return train_df,test_df
+
+
+def Make_Features_Date(df):
+    df[['release_month','release_day','release_year']]=df['release_date'].str.split('/',expand=True).replace(np.nan, 0).astype(int)
+    df['release_year'] = df['release_year']
+    df.loc[ (df['release_year'] <= 19) & (df['release_year'] < 100), "release_year"] += 2000
+    df.loc[ (df['release_year'] > 19)  & (df['release_year'] < 100), "release_year"] += 1900
+    
+    releaseDate = pd.to_datetime(df['release_date']) 
+    df['release_dayofweek'] = releaseDate.dt.dayofweek 
+    df['release_quarter'] = releaseDate.dt.quarter  
+    return df
+
+def plot_Date_Features(train):
+    meanRevenueByYear = train.groupby("release_year")["revenue"].aggregate('mean')
+    meanRevenueByYear.plot(figsize=(15,10),color="b")
+    plt.xticks(np.arange(1920,2018,4))
+    plt.xlabel("Release Year")
+    plt.ylabel("Revenue")
+    plt.title("Movie Mean Revenue By Year",fontsize=20)
+    plt.show()
+    meanRevenueByMonth = train.groupby("release_month")["revenue"].aggregate('mean')
+    meanRevenueByMonth.plot(figsize=(15,10),color="b")
+    plt.xlabel("Release Month")
+    plt.ylabel("Revenue")
+    plt.title("Movie Mean Revenue Release Month",fontsize=20)
+    plt.show() 
+    meanRevenueByDayOfWeek = train.groupby("release_dayofweek")["revenue"].aggregate('mean')
+    meanRevenueByDayOfWeek.plot(figsize=(15,10),color="b")
+    plt.xlabel("Day of Week")
+    plt.ylabel("Revenue")
+    plt.title("Movie Mean Revenue by Day of Week",fontsize=20)
+    plt.show()
+    meanRevenueByQuarter = train.groupby("release_quarter")["revenue"].aggregate('mean')
+    meanRevenueByQuarter.plot(figsize=(15,10),color="b")
+    plt.xticks(np.arange(1,5,1))
+    plt.xlabel("Quarter")
+    plt.ylabel("Revenue")
+    plt.title("Movie Mean Revenue by Quarter",fontsize=20)
+    plt.show()
+    
+
+def Make_Features_Popularity_Budget_Runtime(df) :
+    df['_budget_runtime_ratio'] = df['budget']/df['runtime'] 
+    df['_budget_popularity_ratio'] = df['budget']/df['popularity']
+    df['_budget_year_ratio'] = df['budget']/(df['release_year']*df['release_year'])
+    df['_releaseYear_popularity_ratio'] = df['release_year']/df['popularity']
+    return df
+
+
+        
+
+import pandas as pd 
+import matplotlib.pyplot as plt
+import numpy as np
+from collections import Counter
+import itertools
+import ast
+import seaborn as sns 
+
+train_df = pd.read_csv("train.csv") 
+test_df = pd.read_csv("test.csv")
+
+#train_df.info()
+PlotNullCount(train_df,test_df)
+#Based on the data we have obtained, there are many null values in some columns, we should eliminate them.
+
+print("(sample,feature) size of train data : "+str(train_df.shape)+"\n")
+print("(sample,feature) size of test data : "+ str(test_df.shape)+"\n")
+
+#We've dropped columns with a null number of 200 and more
+train_df, test_df = DropColumn(train_df,test_df,'belongs_to_collection')#Feature: belongs_to_collection, Handled feature rate : 1/22
+train_df, test_df = DropColumn(train_df,test_df,'Keywords')#Feature: Keywords, Handled feature rate : 2/22
+train_df, test_df = DropColumn(train_df,test_df,'tagline')#Feature: tagline, Handled feature rate : 3/22
+train_df, test_df = DropColumn(train_df,test_df,'homepage')##Feature: homepage, Handled feature rate : 4/22
+print("(sample,feature) size of train data : "+str(train_df.shape)+"\n")
+print("(sample,feature) size of test data : "+ str(test_df.shape)+"\n")
+
+
+#New features based on 'genres' are derived. and genres column were deleted
+train_df,test_df = MakeGenresAndPlot(train_df,test_df)##Feature: genres, Handled feature rate : 5/22
+#recently added features such as Comedy, Drama, Family etc.
+
+
+#imdb_id and poster_path features don't tell us anything meaningful, so we dropped them.
+train_df, test_df = DropColumn(train_df,test_df,'imdb_id')#Feature: imdb_id, Handled feature rate : 6/22
+train_df, test_df = DropColumn(train_df,test_df,'poster_path')#Feature: poster_path, Handled feature rate : 7/22
+
+
+GraphsOfOriginalLanguages(train_df,test_df)
+#As we can see from the graphs, the 'original language' feature will not have a good effect on earnings. 
+#So we've dropped this feature too.
+train_df, test_df = DropColumn(train_df,test_df,'original_language')#Feature: original_language, Handled feature rate : 8/22
+#and for the same reason we've dropped 'spoken languages'.
+train_df, test_df = DropColumn(train_df,test_df,'spoken_languages')#Feature: spoken_languages, Handled feature rate : 9/22
+
+
+#if both value are equals to each other then 'isTitleDifferent'=0, otherwise 'isTitleDifferent'=0
+train_df['isTitleDifferent'] = 1
+train_df.loc[ train_df['original_title'] == train_df['title'] ,"isTitleDifferent"] = 0 
+test_df['isTitleDifferent'] = 1
+test_df.loc[ test_df['original_title'] == test_df['title'] ,"isTitleDifferent"] = 0 
+train_df, test_df = DropColumn(train_df,test_df,'original_title')#Feature: original_title, Handled feature rate : 10/22
+
+# We create a new features by taking the number of words from both the columns 'overview' and 'title'.
+train_df['overview_word_count'] = train_df['overview'].str.split().str.len()
+train_df['tagline_word_count'] = train_df['title'].str.split().str.len()
+test_df['overview_word_count'] = test_df['overview'].str.split().str.len()
+test_df['tagline_word_count'] = test_df['title'].str.split().str.len()
+train_df, test_df = DropColumn(train_df,test_df,'title')#Feature: title, Handled feature rate : 11/22
+train_df, test_df = DropColumn(train_df,test_df,'overview')#Feature: title, Handled feature rate : 12/22
+
+
+
+train_df,test_df  = Make_Features_With_Name(train_df,test_df,'production_countries') #Feature: production_countries, Handled feature rate : 13/22   
+train_df,test_df  = Make_Features_With_Name(train_df,test_df,'production_companies') #Feature: production_companies, Handled feature rate : 14/22   
+train_df,test_df= Make_Features_With_Name(train_df,test_df,'cast')#Feature: cast, Handled feature rate : 15/22
+train_df,test_df  = Make_Features_Crew(train_df,test_df)#Feature: crew, Handled feature rate : 16/22
+
+
+    
+train_df = Make_Features_Date(train_df)
+test_df = Make_Features_Date(test_df)
+train_df, test_df = DropColumn(train_df,test_df,'release_date')#Feature: release_date, Handled feature rate : 17/22
+plot_Date_Features(train_df)
+
+
+#we don't need status because almost all is released. 
+train_df, test_df = DropColumn(train_df,test_df,'status')#Feature: status, Handled feature rate : 18/22
+
+
+#Using x and y we get these new features : ratio of budget to popularity, 
+#ratio of budget to runtime, ratio of budget  to release year, ratio of popularity to release year
+
+train_df =Make_Features_Popularity_Budget_Runtime(train_df)
+test_df = Make_Features_Popularity_Budget_Runtime(test_df)
+#Feature: budget, Handled feature rate : 19/22
+#Feature: popularity, Handled feature rate : 20/22
+train_df, test_df = DropColumn(train_df,test_df,'runtime')#Feature: runtime, Handled feature rate : 21/22
+#id column means nothing
+#train_df, test_df = DropColumn(train_df,test_df,'id')#Feature: id, Handled feature rate : 22/22
+
+train_df.to_csv("train_features.csv", index=False)
+test_df.to_csv("test_features.csv", index=False)
+
+train_df.info() 
+
+
+
+ 
