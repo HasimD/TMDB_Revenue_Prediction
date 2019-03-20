@@ -261,7 +261,7 @@ test_df = Make_Features_Popularity_Budget_Runtime(test_df)
 #Feature: popularity, Handled feature rate : 20/22
 train_df, test_df = DropColumn(train_df,test_df,'runtime')#Feature: runtime, Handled feature rate : 21/22
 #id column means nothing
-#train_df, test_df = DropColumn(train_df,test_df,'id')#Feature: id, Handled feature rate : 22/22
+train_df, test_df = DropColumn(train_df,test_df,'id')#Feature: id, Handled feature rate : 22/22
 
 train_df.to_csv("train_features.csv", index=False)
 test_df.to_csv("test_features.csv", index=False)
