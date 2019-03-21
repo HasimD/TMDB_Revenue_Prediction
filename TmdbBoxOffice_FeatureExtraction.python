@@ -6,7 +6,7 @@ def PlotNullCount(train_df,test_df):
     plt.title("Null Counts Of Features",fontsize=20)
     train_df.isna().sum().sort_values(ascending=True).plot(kind='barh',colors='Blue', fontsize=20)
 
-def MakeGenresAndPlot(train_df,test_df):
+def MakeGenresAndPlot(train_df,test_df):#All genres are added as a feature.
     train_df.genres = train_df.genres.apply(lambda x: list(map(lambda d: list(d.values())[1], ast.literal_eval(x)) if isinstance(x, str) else []))
     test_df.genres = test_df.genres.apply(lambda x: list(map(lambda d: list(d.values())[1], ast.literal_eval(x)) if isinstance(x, str) else []))
     print(train_df.genres.head())
@@ -71,7 +71,7 @@ def get_json_dict(df,column) :
     result[column] = d
     return result
 
-def MakeDictsForJsonColumn(train_df,test_df,column) :
+def MakeDictsForJsonColumn(train_df,test_df,column) : #If the number of samples in the column is greater than 10, it is added as a feature.
     
     train_df[column] = train_df[column].apply(lambda x : get_dictionary(x))
     test_df[column] = test_df[column].apply(lambda x : get_dictionary(x))
@@ -80,7 +80,6 @@ def MakeDictsForJsonColumn(train_df,test_df,column) :
     remove = []
     train_id = set(list(train_dict[column].keys()))
     test_id = set(list(test_dict[column].keys()))   
-    
     remove += list(train_id - test_id) + list(test_id - train_id)
     for i in train_id.union(test_id) - set(remove) :
         if train_dict[column][i] < 10 or i == '' :

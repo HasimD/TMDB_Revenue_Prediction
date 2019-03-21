@@ -8,6 +8,7 @@ from sklearn.model_selection import KFold
 
 train = pd.read_csv("train_features.csv") 
 test = pd.read_csv("test_features.csv")
+print(len(test))
 train.fillna(value=0.0, inplace = True)
 test.fillna(value=0.0, inplace = True)
 train['revenue'] = np.log1p(train['revenue'])
@@ -55,6 +56,7 @@ def xgb_model(trn_x, trn_y, val_x, val_y, test, verbose) :
 result_dict = dict()
 val_pred = np.zeros(train.shape[0])
 test_pred = np.zeros(test.shape[0])
+print(len(test_pred))
 final_err = 0
 verbose = False
 
@@ -73,10 +75,22 @@ for i, (trn, val) in enumerate(fold) :
     #""" xgboost
     start = datetime.now()
     result = xgb_model(trn_x, trn_y, val_x, val_y, test, verbose)
-    fold_val_pred.append(result['val']*0.2)
-    fold_test_pred.append(result['test']*0.2)
+    fold_val_pred.append(result['val'])
+    fold_test_pred.append(result['test'])
     fold_err.append(result['error'])
     print("xgb model.", "{0:.5f}".format(result['error']), '(' + str(int((datetime.now()-start).seconds/60)) + 'm)')
-
-
+    val_pred[val] += np.mean(np.array(fold_val_pred), axis = 0)
+    test_pred += np.mean(np.array(fold_test_pred), axis = 0) / k
+    final_err += (sum(fold_err) / len(fold_err)) / k
+    
+    print("---------------------------")
+    print('')
 #------------------------- FIRST MODEL------------------------------    
+print("fianl avg   err.", final_err)
+    
+sub = pd.read_csv('sample_submission.csv')
+df_sub = pd.DataFrame()
+df_sub['id'] = sub['id']
+df_sub['revenue'] = np.expm1(test_pred)
+print(df_sub['revenue'])
+df_sub.to_csv("xgboost_submission.csv", index=False)
