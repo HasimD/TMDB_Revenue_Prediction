@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 
+from keras import backend as K
+
+def root_mean_squared_error(y_true, y_pred):
+        return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
+
 import pandas as pd 
 import numpy as np
-from datetime import datetime
-from sklearn.model_selection import KFold
-from keras.layers import Dense, Activation, Flatten
+import matplotlib.pyplot as plt
+from keras.layers import Dense, Activation , Flatten
 from keras.models import Sequential
 from keras.callbacks import ModelCheckpoint
 
@@ -27,25 +31,24 @@ X_test = sc.transform(test)
 model = Sequential()
 
 # Adding the input layer and the first hidden layer
-model.add(Dense(32, activation = 'relu', input_dim = 522))
-
-# Adding the second hidden layer
-model.add(Dense(units = 32, activation = 'relu'))
-
-# Adding the third hidden layer
-model.add(Dense(units = 32, activation = 'relu'))
-
-# Adding the output layer
-model.add(Dense(units = 1))
-
-
-model.compile(optimizer = "rmsprop", loss = 'mean_squared_error',metrics =["mse"])
-
-model.fit(X_train, y_train, batch_size = 10, epochs = 100)
-
+model.add(Dense(128, kernel_initializer='normal',input_dim = 522, activation='relu'))
+model.add(Dense(256, kernel_initializer='normal',activation='relu'))
+model.add(Dense(256, kernel_initializer='normal',activation='relu'))
+model.add(Dense(256, kernel_initializer='normal',activation='relu'))
+model.add(Dense(units=1, kernel_initializer='normal',activation='linear'))
+model.compile(loss=root_mean_squared_error, optimizer='adam')
+model.summary()
+checkpoint_name = 'Weights.hdf5' 
+checkpoint = ModelCheckpoint(checkpoint_name, monitor='val_loss', verbose = 1, save_best_only = True, mode ='auto')
+callbacks_list = [checkpoint]
+history=model.fit(X_train, y_train, epochs=250, batch_size=32, validation_split = 0.2, callbacks=callbacks_list)
+wights_file = 'Weights.hdf5' # choose the best checkpoint 
+model.load_weights(wights_file) # load it
+model.compile(loss=root_mean_squared_error, optimizer='sgd')
+print('Loss:    ', history.history['loss'][-1], '\nVal_loss: ', history.history['val_loss'][-1])
+score_rmse_train = model.evaluate(X_train, y_train)
+print('Train Score:', score_rmse_train)
 y_pred = model.predict(X_test)
-
-
 sub = pd.read_csv('sample_submission.csv')
 df_sub = pd.DataFrame()
 df_sub['id'] = sub['id']
@@ -53,3 +56,4 @@ df_sub['revenue'] = np.expm1(y_pred)
 df_sub=df_sub.replace([np.inf,-np.inf],0.0)
 print(df_sub['revenue'])
 df_sub.to_csv("NN_submission.csv", index=False)
+
